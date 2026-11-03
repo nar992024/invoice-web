@@ -24,16 +24,19 @@ PROJECT_NAME=$(basename "$CLAUDE_PROJECT_DIR")
 # 현재 시간
 TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S')
 
-# JSON 입력에서 정보 추출 (있는 경우)
-REASON=$(jq -r '.hook_event_name')
+# JSON 입력에서 이벤트명 추출 (jq 미설치 환경이 있어 Node 사용)
+EVENT_NAME=$(node -e 'let v;try{v=JSON.parse(require("fs").readFileSync(0,"utf8")).hook_event_name}catch{}process.stdout.write(String(v??"Stop"))')
 
 # 디버깅을 위한 변수 출력 (stderr로 출력)
-echo "DEBUG: REASON = '$REASON'" >&2
+echo "DEBUG: EVENT_NAME = '$EVENT_NAME'" >&2
 echo "DEBUG: PROJECT_NAME = '$PROJECT_NAME'" >&2
 echo "DEBUG: TIMESTAMP = '$TIMESTAMP'" >&2
 
+# Slack 메시지 본문 (라벨은 굵게 표시)
+TEXT=$(printf '*프로젝트:* %s\n*이벤트:* %s\n*상태:* ✅ 작업 완료\n*시간:* %s' "$PROJECT_NAME" "$EVENT_NAME" "$TIMESTAMP")
+
 # JSON payload 생성
-PAYLOAD=$(printf '{"channel": "#claude-code", "username": "Claude Code", "text": "✅ 작업 완료 알림\n\n프로젝트: %s\n상태: %s\n시간: %s\n\nClaude Code 작업이 완료되었습니다.", "icon_emoji": ":white_check_mark:"}' "$PROJECT_NAME" "$REASON" "$TIMESTAMP")
+PAYLOAD=$(TEXT="$TEXT" node -e 'process.stdout.write(JSON.stringify({channel:"#claude-code",username:"Claude Code",text:process.env.TEXT,icon_emoji:":white_check_mark:"}))')
 
 echo "DEBUG: PAYLOAD = '$PAYLOAD'" >&2
 

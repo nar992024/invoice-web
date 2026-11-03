@@ -18,8 +18,13 @@ if [ -z "$SLACK_WEBHOOK_URL" ]; then
     exit 1
 fi
 
-# JSON 입력에서 메시지 추출 (있는 경우)
-MESSAGE=$(jq -r '.message')
+# JSON 입력에서 이벤트명과 메시지 추출 (jq 미설치 환경이 있어 Node 사용)
+INPUT=$(cat)
+read_field() {
+    printf '%s' "$INPUT" | node -e 'let v;try{v=JSON.parse(require("fs").readFileSync(0,"utf8"))[process.argv[1]]}catch{}process.stdout.write(String(v??process.argv[2]))' "$1" "$2"
+}
+EVENT_NAME=$(read_field hook_event_name "Notification")
+MESSAGE=$(read_field message "알림이 도착했습니다")
 
 # 프로젝트명 추출
 PROJECT_NAME=$(basename "$CLAUDE_PROJECT_DIR")
@@ -28,12 +33,16 @@ PROJECT_NAME=$(basename "$CLAUDE_PROJECT_DIR")
 TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S')
 
 # 디버깅을 위한 변수 출력 (stderr로 출력)
+echo "DEBUG: EVENT_NAME = '$EVENT_NAME'" >&2
 echo "DEBUG: MESSAGE = '$MESSAGE'" >&2
 echo "DEBUG: PROJECT_NAME = '$PROJECT_NAME'" >&2
 echo "DEBUG: TIMESTAMP = '$TIMESTAMP'" >&2
 
+# Slack 메시지 본문 (라벨은 굵게 표시)
+TEXT=$(printf '*프로젝트:* %s\n*이벤트:* %s\n*상태:* 🔔 %s\n*시간:* %s' "$PROJECT_NAME" "$EVENT_NAME" "$MESSAGE" "$TIMESTAMP")
+
 # JSON payload 생성
-PAYLOAD=$(printf '{"channel": "#claude-code", "username": "Claude Code", "text": "🔔 권한 요청 알림\n\n프로젝트: %s\n상태: %s\n시간: %s\n\nClaude Code에서 알림이 도착했습니다.", "icon_emoji": ":bell:"}' "$PROJECT_NAME" "$MESSAGE" "$TIMESTAMP")
+PAYLOAD=$(TEXT="$TEXT" node -e 'process.stdout.write(JSON.stringify({channel:"#claude-code",username:"Claude Code",text:process.env.TEXT,icon_emoji:":bell:"}))')
 
 echo "DEBUG: PAYLOAD = '$PAYLOAD'" >&2
 
